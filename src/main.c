@@ -49,24 +49,32 @@ static void output_error(int error, const char * msg) {
     fprintf(stderr, "Error: %s\n", msg);
 }
 
-void EMSCRIPTEN_KEEPALIVE generate_frame() {
+void drawView(mat4x4 projection, mat4x4 camera) {
+    mat4x4 m, mv, mvp;
+    mat4x4_translate(m, 0.0f, 0.0, -1.0f);
+    //mat4x4_rotate_Z(m, m, (float) glfwGetTime());
+    mat4x4_mul(mv, camera, m);
+    mat4x4_mul(mvp, projection, mv);
+    glUseProgram(program);
+    glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*) mvp);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+
+void generate_frame() {
     float ratio;
     int width, height;
-    mat4x4 m, p, mvp;
     emscripten_get_canvas_element_size("#canvas", &width, &height);
-    //glfwGetFramebufferSize(window, &width, &height);
     ratio = width / (float) height;
     glViewport(0, 0, width, height);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    mat4x4_identity(m);
-    mat4x4_rotate_Z(m, m, (float) glfwGetTime());
-    mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
-    mat4x4_mul(mvp, p, m);
-    glUseProgram(program);
-    glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*) mvp);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
 
+    mat4x4 c, p;
+    mat4x4_identity(c);
+    mat4x4_perspective(p, 1.6f, ratio, 0.01f, 100.0f);
+
+    drawView(p, c);
+    
     glfwSwapBuffers(window);
     glfwPollEvents();
 }
@@ -151,8 +159,6 @@ static int check_linked(program) {
 }
 
 static void renderLoop() {
-    printf("renderLoop\n");
-    
     if (!emscripten_vr_display_presenting(gDisplay)) {
         emscripten_vr_cancel_display_render_loop(gDisplay);
         emscripten_resume_main_loop();
@@ -165,27 +171,14 @@ static void renderLoop() {
         return;
     }
 
-    float ratio;
-    mat4x4 m, p, mvp;
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
-    for (int eye = 0; eye < 2; eye++)
-    {
-        if (eye == 0) {
-            ratio = gEyeLeft.renderWidth / (float) gEyeLeft.renderHeight;
-            glViewport(0, 0, gEyeLeft.renderWidth, gEyeLeft.renderHeight);
-        } else {
-            ratio = gEyeRight.renderWidth / (float) gEyeRight.renderHeight;
-            glViewport(gEyeLeft.renderWidth, 0, gEyeRight.renderWidth, gEyeRight.renderHeight);
-        }
-        mat4x4_identity(m);
-        mat4x4_rotate_Z(m, m, (float) glfwGetTime());
-        mat4x4_ortho(p, -ratio, ratio, -1.f, 1.f, 1.f, -1.f);
-        mat4x4_mul(mvp, p, m);
-        glUseProgram(program);
-        glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*) mvp);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-    }
+
+    glViewport(0, 0, gEyeLeft.renderWidth, gEyeLeft.renderHeight);
+    drawView(*(mat4x4*)&data.leftProjectionMatrix, *(mat4x4*)&data.leftViewMatrix);
+
+    glViewport(gEyeLeft.renderWidth, 0, gEyeRight.renderWidth, gEyeRight.renderHeight);
+    drawView(*(mat4x4*)&data.rightProjectionMatrix, *(mat4x4*)&data.rightViewMatrix);
 
     //glfwSwapBuffers(window);
     //glfwPollEvents();
@@ -215,8 +208,6 @@ static void requestPresentCallback(void* userData) {
 /* Click callback for requesting present */
 static EM_BOOL clickCallback(int eventType, const EmscriptenMouseEvent* e, void* userData) {
     if(!e || eventType != EMSCRIPTEN_EVENT_CLICK) return EM_FALSE;
-
-    fprintf(stderr, "Clicked\n");
     
     if (emscripten_vr_display_presenting(gDisplay)) {
         emscripten_vr_exit_present(gDisplay);
@@ -244,7 +235,7 @@ int main() {
     glfwSetErrorCallback(output_error);
 
     if (!glfwInit()) {
-        fputs("Faileid to initialize GLFW", stderr);
+        fputs("Failed to initialize GLFW", stderr);
         emscripten_force_exit(EXIT_FAILURE);
     }
 
