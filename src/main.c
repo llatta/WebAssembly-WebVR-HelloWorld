@@ -3,9 +3,6 @@
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 #include <emscripten/vr.h>
-
-#define GLFW_INCLUDE_ES2
-#include <GLFW/glfw3.h>
 #include <GLES2/gl2.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +10,6 @@
 VRDisplayHandle gDisplay = -1;
 VREyeParameters gEyeLeft, gEyeRight;
 
-GLFWwindow *window;
 GLuint vertex_buffer, vertex_shader, fragment_shader, program;
 GLint mvp_location, vpos_location, vcol_location;
 
@@ -92,27 +88,16 @@ static int checkShaderProgramLinked(program)
 
 void initGL()
 {
-    glfwSetErrorCallback(output_error);
-
-    if (!glfwInit())
-    {
-        fputs("Failed to initialize GLFW", stderr);
-        emscripten_force_exit(EXIT_FAILURE);
-    }
-
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-
-    window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
-
-    if (!window)
-    {
-        fputs("Failed to create GLFW window", stderr);
-        glfwTerminate();
-        emscripten_force_exit(EXIT_FAILURE);
-    }
-
-    glfwMakeContextCurrent(window);
+    EmscriptenWebGLContextAttributes attr;
+    emscripten_webgl_init_context_attributes(&attr);
+    attr.alpha = attr.depth = attr.stencil = attr.antialias = attr.preferLowPowerToHighPerformance = attr.failIfMajorPerformanceCaveat = 0;
+    attr.preserveDrawingBuffer = 1; // Some platforms need this true to have the external monitor mirror the contents of the VR display
+    attr.enableExtensionsByDefault = 1;
+    attr.premultipliedAlpha = 0;
+    attr.majorVersion = 1;
+    attr.minorVersion = 0;
+    EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context(0, &attr);
+    emscripten_webgl_make_context_current(ctx);
 
     glGenBuffers(1, &vertex_buffer);
     glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
@@ -149,7 +134,7 @@ void drawView(mat4x4 projection, mat4x4 camera)
 {
     mat4x4 m, mv, mvp;
     mat4x4_translate(m, 0.0f, 0.0, -1.0f);
-    //mat4x4_rotate_Z(m, m, (float) glfwGetTime());
+    mat4x4_rotate_Z(m, m, (float)emscripten_get_now() / 1000.0f);
     mat4x4_mul(mv, camera, m);
     mat4x4_mul(mvp, projection, mv);
     glUseProgram(program);
@@ -216,9 +201,6 @@ void nonVrLoop()
     mat4x4_perspective(p, 1.6f, ratio, 0.01f, 100.0f);
 
     drawView(p, c);
-
-    glfwSwapBuffers(window);
-    glfwPollEvents();
 }
 
 static void vrLoop()
@@ -245,9 +227,6 @@ static void vrLoop()
 
     glViewport(gEyeLeft.renderWidth, 0, gEyeRight.renderWidth, gEyeRight.renderHeight);
     drawView(*(mat4x4 *)&data.rightProjectionMatrix, *(mat4x4 *)&data.rightViewMatrix);
-
-    //glfwSwapBuffers(window); // Not sure if needed
-    glfwPollEvents();
 
     if (!emscripten_vr_submit_frame(gDisplay))
     {
