@@ -2,9 +2,9 @@ CC = emcc
 SRCS = main.c
 FILES = $(addprefix src/, $(SRCS)) # Add 'src/' to each source
 OBJS = $(FILES:.c=.o) # Modify file extensions of FILES
-SHELLFILE = src/vr_template.html # shell_minimal.html # 
-EOPT = WASM=1 USE_GLFW=3 # USE_WEBGL2=1 FULL_ES3=1  # Emscripten specific options
-EOPTS = $(addprefix -s $(EMPTY), $(EOPT)) # -s NO_EXIT_RUNTIME=1	# Add '-s ' to each option
+SHELLFILE = src/vr_template.html # Use src/shell_minimal.html instead if you want to have a text output console on the page for debug info
+EOPT = WASM=1 # Emscripten specific options
+EOPTS = $(addprefix -s $(EMPTY), $(EOPT)) # Add '-s ' to each option
 
 # Builds necessary files
 build: $(OBJS) $(SHELLFILE)

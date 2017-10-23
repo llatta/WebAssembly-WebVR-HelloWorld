@@ -75,9 +75,7 @@
 
       var Module = {
         preRun: [],
-        postRun: function() {
-          //window.requestAnimationFrame(onAnimationFrame);
-        },
+        postRun: [],
         print: (function() {
           var element = document.getElementById('output');
           if (element) element.value = ''; // clear browser cache
@@ -147,39 +145,6 @@
           if (text) Module.printErr('[post-exception status] ' + text);
         };
       };
-    
-      
-      function onAnimationFrame (t) {
-        /*if (vrDisplay) {
-          vrDisplay.requestAnimationFrame(onAnimationFrame);
-
-          vrDisplay.getFrameData(frameData);
-
-          if (vrDisplay.isPresenting) {
-            gl.viewport(0, 0, webglCanvas.width * 0.5, webglCanvas.height);
-            cubeSea.render(frameData.leftProjectionMatrix, frameData.leftViewMatrix, stats, t);
-
-            gl.viewport(webglCanvas.width * 0.5, 0, webglCanvas.width * 0.5, webglCanvas.height);
-            cubeSea.render(frameData.rightProjectionMatrix, frameData.rightViewMatrix, stats, t);
-
-            vrDisplay.submitFrame();
-          } else {
-            gl.viewport(0, 0, webglCanvas.width, webglCanvas.height);
-            mat4.perspective(projectionMat, Math.PI*0.4, webglCanvas.width / webglCanvas.height, 0.1, 1024.0);
-            cubeSea.render(projectionMat, frameData.leftViewMatrix, stats, t);
-            stats.renderOrtho();
-          }
-        } else */{
-          window.requestAnimationFrame(onAnimationFrame);
-
-          // No VRDisplay found.
-          Module.ccall('generate_frame', // name of C function
-                             null, // return type
-                             null, // argument types
-                             null); // arguments
-        }
-      }
-
     </script>
     {{{ SCRIPT }}}
   </body>
