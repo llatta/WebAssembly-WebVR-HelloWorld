@@ -7,6 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// Forward declarations
+static void nonVrLoop();
+static void vrLoop();
+
 VRDisplayHandle gDisplay = -1;
 VREyeParameters gEyeLeft, gEyeRight;
 
@@ -139,99 +143,6 @@ static void drawView(mat4x4 projection, mat4x4 camera)
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 
-// Regularly called render function while VR is NOT active
-static void nonVrLoop()
-{
-	// Check if VR system has come online and we can look for a device
-	if (gDisplay == -1 && emscripten_vr_ready())
-	{
-		int numDisplays = emscripten_vr_count_displays();
-		if (numDisplays == 0)
-		{
-			printf("No VR displays found!\n");
-			return;
-		}
-
-		printf("%d VR displays found\n", numDisplays);
-
-		for (int i = 0; i < numDisplays; ++i)
-		{
-			VRDisplayHandle display = emscripten_vr_get_display_handle(i);
-
-			if (!emscripten_vr_display_connected(display))
-			{
-				continue;
-			}
-
-			VRDisplayCapabilities caps;
-			if (!emscripten_vr_get_display_capabilities(display, &caps))
-			{
-				fprintf(stderr, "Error: failed to get display capabilities.\n");
-				continue;
-			}
-
-			if (caps.canPresent) // ... add more checks if needed
-			{
-				// If we like those caps, use the device
-				gDisplay = display;
-				char* devName = emscripten_vr_get_display_name(display);
-				printf("Using VRDisplay '%s' (displayId '%d')\n", devName, display);
-
-				printf("Display Capabilities:\n"
-					   "{hasPosition: %d, hasExternalDisplay: %d, canPresent: %d, maxLayers: %lu}\n",
-					   caps.hasPosition, caps.hasExternalDisplay, caps.canPresent, caps.maxLayers);
-			}
-		}
-	}
-
-	// Draw single view in non-VR mode
-	float ratio;
-	int width, height;
-	emscripten_get_canvas_element_size("#canvas", &width, &height);
-	ratio = width / (float)height;
-	glViewport(0, 0, width, height);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	mat4x4 c, p;
-	mat4x4_identity(c);
-	mat4x4_perspective(p, 1.6f, ratio, 0.01f, 100.0f);
-
-	drawView(p, c);
-}
-
-// Regularly called render function while VR is active
-static void vrLoop()
-{
-	if (!emscripten_vr_display_presenting(gDisplay))
-	{
-		emscripten_vr_cancel_display_render_loop(gDisplay);
-		emscripten_resume_main_loop();
-		return;
-	}
-
-	VRFrameData data;
-	if (!emscripten_vr_get_frame_data(gDisplay, &data))
-	{
-		printf("Could not get frame data.\n");
-		return;
-	}
-
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
-
-	glViewport(0, 0, gEyeLeft.renderWidth, gEyeLeft.renderHeight);
-	drawView(*(mat4x4 *)&data.leftProjectionMatrix, *(mat4x4 *)&data.leftViewMatrix);
-
-	glViewport(gEyeLeft.renderWidth, 0, gEyeRight.renderWidth, gEyeRight.renderHeight);
-	drawView(*(mat4x4 *)&data.rightProjectionMatrix, *(mat4x4 *)&data.rightViewMatrix);
-
-	if (!emscripten_vr_submit_frame(gDisplay))
-	{
-		printf("Error: Failed to submit frame to VR display %d (second iteration)\n", gDisplay);
-	}
-}
-
 // When VR present request is complete, start VR rendering loop
 static void requestPresentCallback(void *userData)
 {
@@ -284,6 +195,100 @@ static EM_BOOL clickCallback(int eventType, const EmscriptenMouseEvent *e, void 
 	return EM_FALSE;
 }
 
+// Regularly called render function while VR is NOT active
+static void nonVrLoop()
+{
+	// Check if VR system has come online and we can look for a device
+	if (gDisplay == -1 && emscripten_vr_ready())
+	{
+		int numDisplays = emscripten_vr_count_displays();
+		if (numDisplays > 0)
+		{
+			printf("%d VR displays found\n", numDisplays);
+
+			for (int i = 0; i < numDisplays; ++i)
+			{
+				VRDisplayHandle display = emscripten_vr_get_display_handle(i);
+
+				if (!emscripten_vr_display_connected(display))
+				{
+					continue;
+				}
+
+				VRDisplayCapabilities caps;
+				if (!emscripten_vr_get_display_capabilities(display, &caps))
+				{
+					fprintf(stderr, "Error: failed to get display capabilities.\n");
+					continue;
+				}
+
+				if (caps.canPresent) // ... add more checks if needed
+				{
+					// If we like those caps, use the device
+					gDisplay = display;
+					char* devName = emscripten_vr_get_display_name(display);
+					printf("Using VRDisplay '%s' (displayId '%d')\n", devName, display);
+
+					printf("Display Capabilities:\n"
+						"{hasPosition: %d, hasExternalDisplay: %d, canPresent: %d, maxLayers: %lu}\n",
+						caps.hasPosition, caps.hasExternalDisplay, caps.canPresent, caps.maxLayers);
+
+					// Set callback for getting present permission for the VR display.
+					// Must be a reaction to a user action. We'll use click on the canvas.
+					emscripten_set_click_callback("#canvas", 0, EM_TRUE, clickCallback);
+				}
+			}
+		}
+	}
+
+	// Draw single view in non-VR mode
+	float ratio;
+	int width, height;
+	emscripten_get_canvas_element_size("#canvas", &width, &height);
+	ratio = width / (float)height;
+	glViewport(0, 0, width, height);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	mat4x4 c, p;
+	mat4x4_identity(c);
+	mat4x4_perspective(p, 1.6f, ratio, 0.01f, 100.0f);
+
+	drawView(p, c);
+}
+
+// Regularly called render function while VR is active
+static void vrLoop()
+{
+	if (!emscripten_vr_display_presenting(gDisplay))
+	{
+		emscripten_vr_cancel_display_render_loop(gDisplay);
+		emscripten_resume_main_loop();
+		return;
+	}
+
+	VRFrameData data;
+	if (!emscripten_vr_get_frame_data(gDisplay, &data))
+	{
+		printf("Could not get frame data.\n");
+		return;
+	}
+
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
+	glViewport(0, 0, gEyeLeft.renderWidth, gEyeLeft.renderHeight);
+	drawView(*(mat4x4 *)&data.leftProjectionMatrix, *(mat4x4 *)&data.leftViewMatrix);
+
+	glViewport(gEyeLeft.renderWidth, 0, gEyeRight.renderWidth, gEyeRight.renderHeight);
+	drawView(*(mat4x4 *)&data.rightProjectionMatrix, *(mat4x4 *)&data.rightViewMatrix);
+
+	if (!emscripten_vr_submit_frame(gDisplay))
+	{
+		printf("Error: Failed to submit frame to VR display %d (second iteration)\n", gDisplay);
+	}
+}
+
 int main()
 {
 	// Start GL
@@ -292,19 +297,16 @@ int main()
 	// Start VR system
 	if (!emscripten_vr_init())
 	{
-		printf("Skipping: Browser does not support WebVR\n");
-		return 0;
+		fprintf(stderr, "Browser does not support WebVR\n");
+	}
+	else
+	{
+		printf("Browser is running WebVR version %d.%d\n",
+			emscripten_vr_version_major(),
+			emscripten_vr_version_minor());
 	}
 
-	printf("Browser is running WebVR version %d.%d\n",
-		   emscripten_vr_version_major(),
-		   emscripten_vr_version_minor());
-
 	emscripten_set_main_loop(nonVrLoop, 0, 0);
-
-	// Set callback for getting present permission for the VR display.
-	// Must be a reaction to a user action. We'll use click on the canvas.
-	emscripten_set_click_callback("#canvas", 0, EM_TRUE, clickCallback);
 
 	return 0;
 }
