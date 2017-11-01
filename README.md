@@ -4,6 +4,8 @@ WebAssembly WebVR Hello World
 This is sort of a Hello World program demonstrating driving WebVR from a WebAssembly program in a browser.
 You should see a spinning triangle, the click/tap on the canvas, and VR mode should start.
 
+Run a compiled version of this test at: http://2ld.de/webvrasm/
+
 It has been tested on Firefox 56, Chrome with WebVR Emulation Extension, and the Oculus Browser on GearVR.
 
 The code uses the WebVR 1.1 API with the C wrapper in emscripten 1.37.22. These APIs are still in flux, so future compatibility is uncertain.
