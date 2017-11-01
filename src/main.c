@@ -210,11 +210,6 @@ static void nonVrLoop()
 			{
 				VRDisplayHandle display = emscripten_vr_get_display_handle(i);
 
-				if (!emscripten_vr_display_connected(display))
-				{
-					continue;
-				}
-
 				VRDisplayCapabilities caps;
 				if (!emscripten_vr_get_display_capabilities(display, &caps))
 				{
